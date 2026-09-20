@@ -1,0 +1,34 @@
+dev.env.bat
+
+# Local secrets and environment configuration
+/JWT_SECRET_password.txt
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Generated output and logs
+target/
+node_modules/
+dist/
+dist-ssr/
+logs/
+*.log
+uploads/task-attachments/
+employee-management-backend/uploads/task-attachments/
+
+# IDE and OS files
+.vscode/
+.idea/
+.settings/
+.classpath
+.project
+.factorypath
+.DS_Store
+Thumbs.db
+*.iml
+*.iws
+*.ipr
+*.suo
+*.sw?
