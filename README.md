@@ -1,6 +1,6 @@
 # ManageFlow
 
-ManageFlow is a full-stack HR and employee operations application. It provides secure employee and department management, work-shift tracking, monthly work-hours reporting, task collaboration, account onboarding, and role-based access for administrators and employees.
+ManageFlow is Full-stack employee management and task collaboration operations application. It provides secure employee and department management, work-shift tracking, monthly work-hours reporting, task collaboration, account onboarding, and role-based access for administrators and employees.
 
 The project is designed as a portfolio application that demonstrates a practical Spring Boot, PostgreSQL, and React architecture.
 
