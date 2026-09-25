@@ -18,6 +18,44 @@ The project is designed as a portfolio application that demonstrates a practical
 - Task management with assignment, acceptance/decline, deadlines, checklist-driven or manual progress, attachments, activity history, change requests, and archiving.
 - Persistent in-app notifications for task assignment, updates, acceptance, decline, completion, and requested changes.
 
+## Screenshots
+
+### Admin Dashboard
+
+Overview cards for active employees, departments, active shifts, and this month's completed hours.
+
+![ManageFlow admin dashboard with operational summary cards](docs/screenshots/admin-dashboard.png)
+
+### Employee Directory
+
+Central employee directory with role-aware management actions and department information.
+
+![ManageFlow employee directory showing employee records and management actions](docs/screenshots/employee-directory.png)
+
+### Work Hours and Payroll Preparation
+
+Monthly work calendar with completed time, saved hourly rate, and estimated-pay calculation.
+
+![ManageFlow work-hours calendar and payroll preparation modal](docs/screenshots/work-hours-payroll.png)
+
+### Task Management
+
+Task workspace with status, progress, deadlines, filters, and role-specific actions.
+
+![ManageFlow task management page with task progress and workflow actions](docs/screenshots/task-management.png)
+
+### Task Details and Collaboration
+
+Detailed task view with checklist progress, shared attachments, and activity history.
+
+![ManageFlow task details modal showing collaboration information](docs/screenshots/task-details-collaboration.png)
+
+### Employee Workspace
+
+Employee view for shift tracking, assigned work, and in-app notifications.
+
+![ManageFlow employee workspace with shift controls and task notifications](docs/screenshots/employee-workspace.png)
+
 ## Roles
 
 ### ADMIN
