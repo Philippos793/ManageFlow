@@ -1,0 +1,11 @@
+.git
+.gitignore
+.mvn
+target
+uploads
+logs
+*.log
+.env
+.env.*
+dev.env.bat
+JWT_SECRET_password.txt

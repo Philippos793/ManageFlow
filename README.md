@@ -113,6 +113,10 @@ Tasks are created by an ADMIN and assigned to an active Employee with a linked E
 - Vitest and React Testing Library
 - ESLint
 
+### Containerization
+
+- Docker and Docker Compose
+
 ## Architecture
 
 ### Backend
@@ -166,9 +170,67 @@ Employee deactivation preserves work-shift, payroll, and task history. Deactivat
 - Java 21
 - PostgreSQL running locally
 - Node.js and npm
+- Docker Desktop or Docker Engine with Docker Compose, for the containerized setup
 - A Gmail SMTP account/app password only if you want to test outbound emails locally
 
 The backend Maven Wrapper is included, so a global Maven installation is not required.
+
+## Docker Quick Start
+
+ManageFlow can be started as a complete local stack with Docker Compose:
+
+```text
+Browser → Nginx/React frontend → Spring Boot backend → PostgreSQL
+```
+
+The stack includes `frontend`, `backend`, `postgres`, and `mailpit` services.
+
+### 1. Configure local Docker environment variables
+
+Copy the Docker environment example from the project root:
+
+```bash
+cp .env.example .env
+```
+
+On Windows Command Prompt:
+
+```bat
+copy .env.example .env
+```
+
+Set local values in the ignored `.env` file for the PostgreSQL password, Base64-encoded JWT secret, and initial ADMIN username/password. Never commit this file or use real production credentials.
+
+### 2. Build and start the stack
+
+```bash
+docker compose up --build
+```
+
+Docker Compose starts the React frontend behind Nginx, the Spring Boot backend, PostgreSQL, and Mailpit. Flyway applies migrations automatically during the backend's first startup, while Hibernate validates the resulting schema.
+
+Open the local services at:
+
+- Frontend: [http://localhost:5173](http://localhost:5173)
+- Backend: [http://localhost:8080](http://localhost:8080)
+- Swagger UI: [http://localhost:8080/swagger-ui/index.html](http://localhost:8080/swagger-ui/index.html)
+- Mailpit: [http://localhost:8025](http://localhost:8025)
+
+Mailpit captures local approval and invitation emails without requiring real SMTP or Gmail credentials. PostgreSQL data and task attachments use Docker volumes, so they persist across normal container restarts.
+
+To stop the stack while preserving volumes:
+
+```bash
+docker compose down
+```
+
+To remove the Docker test data and volumes for a clean reset:
+
+```bash
+docker compose down -v
+```
+
+Use `docker compose down -v` only when you intentionally want to delete the Docker PostgreSQL data and task-attachment volume.
 
 ## Local Setup
 
