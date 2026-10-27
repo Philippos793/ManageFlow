@@ -1,6 +1,8 @@
 # ManageFlow
 
-ManageFlow is Full-stack employee management and task collaboration application. It provides secure employee and department management, work-shift tracking, monthly work-hours reporting, task collaboration, account onboarding, and role-based access for administrators and employees.
+[![CI](https://github.com/Philippos793/ManageFlow/actions/workflows/ci.yml/badge.svg)](https://github.com/Philippos793/ManageFlow/actions/workflows/ci.yml)
+
+ManageFlow is a full-stack employee management and task collaboration application. It provides secure employee and department management, work-shift tracking, monthly work-hours reporting, task collaboration, account onboarding, and role-based access for administrators and employees.
 
 The project is designed as a portfolio application that demonstrates a practical Spring Boot, PostgreSQL, and React architecture.
 
@@ -159,6 +161,9 @@ Employee deactivation preserves work-shift, payroll, and task history. Deactivat
 
 - JWT Bearer authentication with Spring Security.
 - BCrypt password hashing.
+- Login throttling: repeated failed logins for the same username and client address are rejected with `429 Too Many Requests` and a `Retry-After` header. Unknown usernames are checked against a dummy hash so response timing does not reveal which accounts exist.
+- The production frontend is served with a strict Content-Security-Policy and other security headers; API calls are allowed only to the configured backend origin.
+- Swagger/OpenAPI is disabled in the production profile unless `SWAGGER_ENABLED=true`.
 - Role-based endpoint authorization.
 - Employee ownership checks for work shifts, tasks, notifications, and attachments.
 - Case-insensitive uniqueness constraints for usernames and employee emails.
@@ -217,6 +222,14 @@ Open the local services at:
 - Mailpit: [http://localhost:8025](http://localhost:8025)
 
 Mailpit captures local approval and invitation emails without requiring real SMTP or Gmail credentials. PostgreSQL data and task attachments use Docker volumes, so they persist across normal container restarts.
+
+The backend container runs as an unprivileged user and exposes a Docker healthcheck on `/actuator/health`; the frontend starts only after the backend reports healthy.
+
+If you created the `task_attachments` volume with an earlier version of the backend image (which ran as root), fix its ownership once:
+
+```bash
+docker compose run --rm --user root backend chown -R manageflow:manageflow /app/uploads/task-attachments
+```
 
 To stop the stack while preserving volumes:
 
@@ -283,6 +296,9 @@ Other documented configuration:
 | `TASK_ATTACHMENT_STORAGE_PATH` | Optional attachment storage directory. Defaults to `uploads/task-attachments`. |
 | `TASK_ATTACHMENT_MAX_FILE_SIZE_BYTES` | Optional metadata-level maximum attachment size. Defaults to 10 MB. |
 | `TASK_ATTACHMENT_MAX_FILE_SIZE` / `TASK_ATTACHMENT_MAX_REQUEST_SIZE` | Optional Spring multipart limits. Default to 10 MB. |
+| `LOGIN_MAX_ATTEMPTS` | Failed logins allowed per username and client address before a temporary lock. Defaults to `5`. |
+| `LOGIN_LOCK_DURATION` | Lock duration and failure-counting window. Defaults to `15m`. |
+| `SWAGGER_ENABLED` | Enables Swagger UI/OpenAPI in the production profile. Defaults to `false` (Docker Compose sets `true` for local use). |
 
 `DB_PASSWORD` and `JWT_SECRET` are required for every backend start. `ADMIN_USERNAME` and `ADMIN_PASSWORD` are required only when the database has no ADMIN yet; the application fails safely if they are missing at that point. Replace all example placeholders before the first startup.
 
@@ -353,7 +369,11 @@ mvnw.cmd test
 mvnw.cmd clean package
 ```
 
-The backend suite covers service behavior, validation, controllers, authorization/security behavior, Flyway-sensitive flows, and task lifecycle logic. It uses unit and Spring MVC-style tests; it is not presented as a Testcontainers or real-PostgreSQL integration suite.
+The backend suite covers service behavior, validation, controllers, authorization/security behavior, Flyway-sensitive flows, and task lifecycle logic. It is mostly unit and Spring MVC-style tests, plus `FlywayPostgresIntegrationTest`, which uses Testcontainers to apply every Flyway migration to a real PostgreSQL 16 instance and validate the JPA mappings against the resulting schema. That test needs Docker and is skipped automatically when Docker is not running.
+
+### Continuous Integration
+
+GitHub Actions (`.github/workflows/ci.yml`) runs on every push to `main` and on pull requests: backend `mvnw verify` (including the Testcontainers test), frontend lint, tests, and build, and finally both Docker image builds.
 
 ### Frontend
 

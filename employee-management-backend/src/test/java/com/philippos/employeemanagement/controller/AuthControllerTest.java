@@ -1,6 +1,9 @@
 package com.philippos.employeemanagement.controller;
 
 import com.philippos.employeemanagement.config.SecurityConfig;
+import com.philippos.employeemanagement.config.TimeConfig;
+import com.philippos.employeemanagement.service.LoginAttemptService;
+import org.springframework.test.context.TestPropertySource;
 import com.philippos.employeemanagement.dto.request.LoginRequest;
 import com.philippos.employeemanagement.security.CustomAccessDeniedHandler;
 import com.philippos.employeemanagement.security.CustomAuthenticationEntryPoint;
@@ -11,28 +14,25 @@ import com.philippos.employeemanagement.entity.User;
 import com.philippos.employeemanagement.repository.UserRepository;
 import com.philippos.employeemanagement.service.JwtService;
 import com.philippos.employeemanagement.service.UserService;
-import jakarta.servlet.Filter;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.web.context.WebApplicationContext;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -41,7 +41,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(AuthController.class)
-@Import({UserService.class, SecurityConfig.class, CustomAuthenticationEntryPoint.class, CustomAccessDeniedHandler.class})
+@Import({UserService.class, LoginAttemptService.class, TimeConfig.class, SecurityConfig.class,
+        CustomAuthenticationEntryPoint.class, CustomAccessDeniedHandler.class})
+@TestPropertySource(properties = "app.login-rate-limit.max-attempts=3")
 @ImportAutoConfiguration(ServletWebSecurityAutoConfiguration.class)
 class AuthControllerTest {
 
@@ -112,8 +114,48 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.message")
                         .value("Invalid username or password"));
 
-        verify(passwordEncoder, never()).matches(anyString(), anyString());
+        // A dummy hash is still checked so unknown usernames are not faster to reject
+        verify(passwordEncoder).matches(eq("password"), any());
         verify(jwtService, never()).generateToken(any(User.class));
+    }
+
+    @Test
+    void repeatedFailedLoginsAreRateLimited() throws Exception {
+        User user = new User("locked", "encoded-password", Role.ADMIN);
+        when(userRepository.findByUsername("locked")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("wrong-password", "encoded-password")).thenReturn(false);
+
+        for (int attempt = 0; attempt < 3; attempt++) {
+            performLogin("locked", "wrong-password")
+                    .andExpect(status().isUnauthorized());
+        }
+
+        performLogin("locked", "correct-password")
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().exists("Retry-After"))
+                .andExpect(jsonPath("$.status").value(429))
+                .andExpect(jsonPath("$.message")
+                        .value("Too many failed login attempts. Please try again later."));
+
+        verify(passwordEncoder, never()).matches("correct-password", "encoded-password");
+        verify(jwtService, never()).generateToken(any(User.class));
+    }
+
+    @Test
+    void successfulLoginResetsFailedAttempts() throws Exception {
+        User user = new User("recovering", "encoded-password", Role.ADMIN);
+        user.setId(5L);
+        when(userRepository.findByUsername("recovering")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("wrong-password", "encoded-password")).thenReturn(false);
+        when(passwordEncoder.matches("correct-password", "encoded-password")).thenReturn(true);
+        when(jwtService.generateToken(user)).thenReturn("jwt-token");
+
+        performLogin("recovering", "wrong-password").andExpect(status().isUnauthorized());
+        performLogin("recovering", "wrong-password").andExpect(status().isUnauthorized());
+        performLogin("recovering", "correct-password").andExpect(status().isOk());
+        performLogin("recovering", "wrong-password").andExpect(status().isUnauthorized());
+        performLogin("recovering", "wrong-password").andExpect(status().isUnauthorized());
+        performLogin("recovering", "correct-password").andExpect(status().isOk());
     }
 
     @Test

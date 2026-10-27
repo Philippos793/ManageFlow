@@ -10,11 +10,17 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Optional;
+
 @Service
 public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+
+    // Compared against when the username does not exist, so unknown and
+    // known usernames take the same time and cannot be told apart.
+    private final String dummyPasswordHash;
 
     public UserService(
             UserRepository userRepository,
@@ -22,17 +28,20 @@ public class UserService {
 
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.dummyPasswordHash = passwordEncoder.encode("unused-dummy-password");
     }
 
     @Transactional(readOnly = true)
     public User login(String username, String password) {
         String normalizedUsername = AccountValidation.normalizeUsername(username);
-        User user = userRepository
-                .findByUsername(normalizedUsername)
-                .orElseThrow(() ->
-                        new BadCredentialsException("Invalid username or password")
-                );
+        Optional<User> existingUser = userRepository.findByUsername(normalizedUsername);
 
+        if (existingUser.isEmpty()) {
+            passwordEncoder.matches(password, dummyPasswordHash);
+            throw new BadCredentialsException("Invalid username or password");
+        }
+
+        User user = existingUser.get();
         boolean passwordMatches =
                 passwordEncoder.matches(password, user.getPassword());
 
@@ -52,9 +61,3 @@ public class UserService {
         return user;
     }
 }
-
-
-
-
-
-

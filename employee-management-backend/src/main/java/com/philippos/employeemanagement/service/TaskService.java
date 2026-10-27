@@ -3,6 +3,7 @@ package com.philippos.employeemanagement.service;
 import com.philippos.employeemanagement.dto.request.TaskCreateRequest;
 import com.philippos.employeemanagement.dto.request.TaskEditRequest;
 import com.philippos.employeemanagement.dto.request.TaskChecklistItemEditRequest;
+import com.philippos.employeemanagement.dto.request.TaskChecklistItemRequest;
 import com.philippos.employeemanagement.dto.request.TaskChecklistItemUpdateRequest;
 import com.philippos.employeemanagement.dto.request.TaskProgressRequest;
 import com.philippos.employeemanagement.dto.request.TaskRequestChangesRequest;
@@ -147,10 +148,8 @@ public class TaskService {
 
         Task savedTask = taskRepository.save(task);
         if (taskChanged) {
-            User employeeUser = userRepository.findByEmployee_Id(
-                            savedTask.getAssignedEmployee().getId())
-                    .orElseThrow(() -> new EmployeeConflictException(
-                            "Task cannot be updated because the assigned employee does not have a linked account"));
+            User employeeUser = findAssignedEmployeeUser(savedTask,
+                    "Task cannot be updated because the assigned employee does not have a linked account");
             notificationService.create(employeeUser, savedTask, NotificationType.TASK_UPDATED);
             taskActivityService.record(savedTask, admin, TaskActivityType.TASK_UPDATED);
         }
@@ -235,8 +234,7 @@ public class TaskService {
         if (task.getChecklistItems().isEmpty()) {
             task.setProgress(0);
         } else {
-            List<com.philippos.employeemanagement.dto.request.TaskChecklistItemRequest>
-                    requestedChecklistItems = request.getChecklistItems();
+            List<TaskChecklistItemRequest> requestedChecklistItems = request.getChecklistItems();
             if (requestedChecklistItems == null || requestedChecklistItems.isEmpty()) {
                 throw new TaskConflictException(
                         "At least one new incomplete checklist item is required when requesting changes");
@@ -252,9 +250,8 @@ public class TaskService {
             recalculateChecklistProgress(task, resultingChecklistItems);
         }
         Task savedTask = taskRepository.save(task);
-        User employeeUser = userRepository.findByEmployee_Id(savedTask.getAssignedEmployee().getId())
-                .orElseThrow(() -> new EmployeeConflictException(
-                        "Task changes cannot be requested because the assigned employee does not have a linked account"));
+        User employeeUser = findAssignedEmployeeUser(savedTask,
+                "Task changes cannot be requested because the assigned employee does not have a linked account");
         notificationService.create(employeeUser, savedTask, NotificationType.TASK_CHANGES_REQUESTED);
         taskActivityService.record(savedTask, admin, TaskActivityType.TASK_CHANGES_REQUESTED,
                 "Changes requested: " + request.getFeedback().trim());
@@ -283,11 +280,7 @@ public class TaskService {
         }
         Task savedTask = taskRepository.save(task);
         taskActivityService.record(savedTask, user, TaskActivityType.PROGRESS_UPDATED);
-        if (savedTask.getStatus() == TaskStatus.COMPLETED) {
-            notificationService.create(task.getCreatedByUser(), savedTask,
-                    NotificationType.TASK_COMPLETED);
-            taskActivityService.record(savedTask, user, TaskActivityType.TASK_COMPLETED);
-        }
+        notifyCreatorIfCompleted(savedTask, user);
         return taskMapper.toResponse(savedTask);
     }
 
@@ -310,23 +303,25 @@ public class TaskService {
 
         List<TaskChecklistItem> checklistItems = taskChecklistItemRepository.findAllByTask_Id(taskId);
         task.setChecklistItems(checklistItems);
-        long completedItems = checklistItems.stream()
-                .filter(TaskChecklistItem::isCompleted)
-                .count();
-        int progress = (int) (completedItems * 100 / checklistItems.size());
-        task.setProgress(progress);
-        if (completedItems == checklistItems.size()) {
-            task.setStatus(TaskStatus.COMPLETED);
-            task.setCompletedAt(clock.instant());
-        }
+        recalculateChecklistProgress(task, checklistItems);
         Task savedTask = taskRepository.save(task);
         taskActivityService.record(savedTask, user, TaskActivityType.CHECKLIST_UPDATED);
-        if (savedTask.getStatus() == TaskStatus.COMPLETED) {
-            notificationService.create(task.getCreatedByUser(), savedTask,
-                    NotificationType.TASK_COMPLETED);
-            taskActivityService.record(savedTask, user, TaskActivityType.TASK_COMPLETED);
-        }
+        notifyCreatorIfCompleted(savedTask, user);
         return taskMapper.toResponse(savedTask);
+    }
+
+    private void notifyCreatorIfCompleted(Task savedTask, User employeeUser) {
+        if (savedTask.getStatus() != TaskStatus.COMPLETED) {
+            return;
+        }
+        notificationService.create(savedTask.getCreatedByUser(), savedTask,
+                NotificationType.TASK_COMPLETED);
+        taskActivityService.record(savedTask, employeeUser, TaskActivityType.TASK_COMPLETED);
+    }
+
+    private User findAssignedEmployeeUser(Task task, String missingAccountMessage) {
+        return userRepository.findByEmployee_Id(task.getAssignedEmployee().getId())
+                .orElseThrow(() -> new EmployeeConflictException(missingAccountMessage));
     }
 
     private User getAuthenticatedAdmin() {
@@ -427,8 +422,7 @@ public class TaskService {
 
         List<TaskChecklistItem> newItems = requests.stream()
                 .filter(request -> request.getId() == null)
-                .map(request -> new com.philippos.employeemanagement.dto.request.TaskChecklistItemRequest(
-                        request.getDescription()))
+                .map(request -> new TaskChecklistItemRequest(request.getDescription()))
                 .map(request -> taskChecklistItemMapper.toEntity(request, task, clock.instant()))
                 .toList();
         List<TaskChecklistItem> savedNewItems = newItems.isEmpty()

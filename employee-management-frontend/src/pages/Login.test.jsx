@@ -69,4 +69,32 @@ describe("Login", () => {
       await screen.findByText("Invalid username or password.")
     ).toBeInTheDocument();
   });
+
+  it("shows the rate-limit message after too many failed logins", async () => {
+    loginMock.mockRejectedValue(
+      new ApiError(429, {
+        message: "Too many failed login attempts. Please try again later.",
+      })
+    );
+
+    render(
+      <MemoryRouter>
+        <Login />
+      </MemoryRouter>
+    );
+
+    fireEvent.change(screen.getByLabelText("Username"), {
+      target: { value: "admin" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "wrong-password" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Sign In" }));
+
+    expect(
+      await screen.findByText(
+        "Too many failed login attempts. Please try again later."
+      )
+    ).toBeInTheDocument();
+  });
 });

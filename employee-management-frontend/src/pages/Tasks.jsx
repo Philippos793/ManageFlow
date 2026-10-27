@@ -8,9 +8,11 @@ import TaskCreateModal from "../components/TaskCreateModal.jsx";
 import TaskEditModal from "../components/TaskEditModal.jsx";
 import TaskRequestChangesModal from "../components/TaskRequestChangesModal.jsx";
 import TaskDetailsModal from "../components/TaskDetailsModal.jsx";
+import TaskCard from "../components/TaskCard.jsx";
 import taskService from "../services/taskService.js";
 import authService from "../services/authService.js";
 import { getFriendlyErrorMessage } from "../utils/apiErrors.js";
+import { matchesTaskFilter } from "../utils/taskFormatting.js";
 
 const TASK_FILTERS = [
   { value: "ALL", label: "All" },
@@ -20,75 +22,6 @@ const TASK_FILTERS = [
   { value: "COMPLETED", label: "Completed" },
   { value: "DECLINED", label: "Declined" },
 ];
-
-function formatTimeAllowed(minutes) {
-  if (!Number.isFinite(minutes)) return "Not available";
-  const days = Math.floor(minutes / (24 * 60));
-  const hours = Math.floor((minutes % (24 * 60)) / 60);
-  const remainingMinutes = minutes % 60;
-  return days > 0
-    ? `${days}d ${hours}h ${remainingMinutes}m`
-    : `${hours}h ${remainingMinutes}m`;
-}
-
-function formatDeadline(value) {
-  if (!value) return "Not set";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Not available";
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
-}
-
-function formatRemainingTime(deadline, currentTime) {
-  const deadlineDate = new Date(deadline);
-  if (Number.isNaN(deadlineDate.getTime())) return "Not available";
-
-  const millisecondsRemaining = deadlineDate.getTime() - currentTime;
-  if (millisecondsRemaining <= 0) return "Overdue";
-
-  const remainingMinutes = Math.max(1, Math.ceil(millisecondsRemaining / 60000));
-  const days = Math.floor(remainingMinutes / (24 * 60));
-  const hours = Math.floor((remainingMinutes % (24 * 60)) / 60);
-  const minutes = remainingMinutes % 60;
-
-  if (days > 0) return `${days}d ${hours}h ${minutes}m remaining`;
-  if (hours > 0) return `${hours}h ${minutes}m remaining`;
-  return `${minutes}m remaining`;
-}
-
-function isOverdueTask(task, currentTime) {
-  if (task.status !== "IN_PROGRESS" || !task.deadline) return false;
-  const deadline = new Date(task.deadline);
-  return !Number.isNaN(deadline.getTime()) && deadline.getTime() <= currentTime;
-}
-
-function matchesFilter(task, filter, currentTime) {
-  if (filter === "ALL") return true;
-  if (filter === "OVERDUE") return isOverdueTask(task, currentTime);
-  if (filter === "IN_PROGRESS") {
-    return task.status === "IN_PROGRESS" && !isOverdueTask(task, currentTime);
-  }
-  return task.status === filter;
-}
-
-function statusStyles(status) {
-  switch (status) {
-    case "IN_PROGRESS":
-      return "bg-blue-100 text-blue-700";
-    case "COMPLETED":
-      return "bg-emerald-100 text-emerald-700";
-    case "DECLINED":
-      return "bg-red-100 text-red-700";
-    default:
-      return "bg-amber-100 text-amber-700";
-  }
-}
-
-function statusLabel(status) {
-  return status?.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Unknown";
-}
 
 function Tasks() {
   const [tasks, setTasks] = useState([]);
@@ -264,7 +197,7 @@ function Tasks() {
     void Promise.resolve().then(() => loadTasks());
   }, [loadTasks]);
 
-  const filteredTasks = tasks.filter((task) => matchesFilter(task, activeFilter, currentTime));
+  const filteredTasks = tasks.filter((task) => matchesTaskFilter(task, activeFilter, currentTime));
   const activeFilterLabel = TASK_FILTERS.find((filter) => filter.value === activeFilter)?.label ?? "All";
 
   useEffect(() => {
@@ -327,102 +260,21 @@ function Tasks() {
 
       {!loadFailed && filteredTasks.length > 0 && (
         <div className="mt-8 grid gap-5 lg:grid-cols-2">
-          {filteredTasks.map((task) => {
-            const progress = Number.isFinite(task.progress) ? task.progress : 0;
-            const checklistItems = Array.isArray(task.checklistItems) ? task.checklistItems : [];
-            const completedChecklistItems = checklistItems.filter((item) => item.completed).length;
-            const isTaskCreator = isAdmin
-              && Number(task.createdByUserId) === currentUserId;
-            const taskCanBeEdited = isTaskCreator
-              && (task.status === "PENDING" || task.status === "IN_PROGRESS");
-            const taskCanBeArchived = isTaskCreator && !task.archived;
-            const taskCanRequestChanges = isTaskCreator && task.status === "COMPLETED";
-            const remainingTime = task.status === "IN_PROGRESS" && task.deadline
-              ? formatRemainingTime(task.deadline, currentTime)
-              : null;
-            const isOverdue = remainingTime === "Overdue";
-            return (
-              <article key={task.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-blue-200 hover:shadow-md sm:p-6">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <h2 className="truncate text-lg font-bold text-slate-950" title={task.title}>{task.title}</h2>
-                    {task.employeeName && <p className="mt-1 text-sm text-slate-500">Assigned to {task.employeeName}</p>}
-                  </div>
-                  <span data-testid={`task-${task.id}-status`} className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${statusStyles(task.status)}`}>
-                    {statusLabel(task.status)}
-                  </span>
-                </div>
-
-                {task.description && <p className="mt-4 line-clamp-3 break-words text-sm leading-6 text-slate-600">{task.description}</p>}
-
-                <div className="mt-5">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-semibold text-slate-700">Progress</span>
-                    <span className="font-bold text-slate-900">{progress}%</span>
-                  </div>
-                  <div
-                    role="progressbar"
-                    aria-label={`${task.title} progress`}
-                    aria-valuemin="0"
-                    aria-valuemax="100"
-                    aria-valuenow={progress}
-                    className="mt-2 h-2.5 overflow-hidden rounded-full bg-slate-100"
-                  >
-                    <div className={`h-full rounded-full ${progress === 100 ? "bg-emerald-500" : "bg-blue-600"}`} style={{ width: `${progress}%` }} />
-                  </div>
-                </div>
-
-                <dl className="mt-5 grid gap-4 border-t border-slate-100 pt-5 sm:grid-cols-2">
-                  <div>
-                    <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Time allowed</dt>
-                    <dd className="mt-1 text-sm font-semibold text-slate-700">{formatTimeAllowed(task.timeAllowedMinutes)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Deadline</dt>
-                    <dd className="mt-1 text-sm font-semibold text-slate-700">{formatDeadline(task.deadline)}</dd>
-                  </div>
-                  {remainingTime && (
-                    <div>
-                      <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">{isOverdue ? "Deadline status" : "Remaining time"}</dt>
-                      <dd className={`mt-1 text-sm font-semibold ${isOverdue ? "text-red-600" : "text-slate-700"}`}>
-                        {remainingTime}
-                      </dd>
-                    </div>
-                  )}
-                </dl>
-
-                {checklistItems.length > 0 && (
-                  <p className="mt-5 border-t border-slate-100 pt-5 text-sm font-medium text-slate-500">
-                    {completedChecklistItems} of {checklistItems.length} checklist items completed
-                  </p>
-                )}
-
-                <div className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:flex-wrap">
-                  <Button variant="secondary" onClick={() => setDetailsTask(task)}>View Details</Button>
-                  {(taskCanBeEdited || taskCanBeArchived || taskCanRequestChanges) && (
-                    <>
-                    {taskCanBeEdited && (
-                      <Button variant="secondary" onClick={() => setEditingTask(task)}>Edit Task</Button>
-                    )}
-                    {taskCanBeArchived && (
-                      <Button variant="secondary" className="border-red-200 text-red-700 hover:bg-red-50" onClick={() => openArchiveTask(task)}>Archive Task</Button>
-                    )}
-                    {taskCanRequestChanges && (
-                      <Button variant="secondary" onClick={() => setRequestChangesTask(task)}>Request Changes</Button>
-                    )}
-                    </>
-                  )}
-                </div>
-
-                {isEmployee && task.status === "PENDING" && (
-                  <div className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row">
-                    <Button className="w-full sm:w-auto" onClick={() => openTaskAction(task, "accept")}>Accept</Button>
-                    <Button variant="secondary" className="w-full border-red-200 text-red-700 hover:bg-red-50 sm:w-auto" onClick={() => openTaskAction(task, "decline")}>Decline</Button>
-                  </div>
-                )}
-              </article>
-            );
-          })}
+          {filteredTasks.map((task) => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              currentTime={currentTime}
+              isAdmin={isAdmin}
+              isEmployee={isEmployee}
+              currentUserId={currentUserId}
+              onViewDetails={setDetailsTask}
+              onEdit={setEditingTask}
+              onArchive={openArchiveTask}
+              onRequestChanges={setRequestChangesTask}
+              onTaskAction={openTaskAction}
+            />
+          ))}
         </div>
       )}
 

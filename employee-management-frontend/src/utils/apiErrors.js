@@ -43,6 +43,11 @@ export function getFriendlyErrorMessage(error, fallbackMessage) {
       return "You do not have permission to perform this action.";
     case 404:
       return "The requested information could not be found.";
+    case 429:
+      return (
+        error?.data?.message ||
+        "Too many attempts. Please wait a few minutes and try again."
+      );
     case 500:
       return "The server encountered a problem. Please try again later.";
     default:

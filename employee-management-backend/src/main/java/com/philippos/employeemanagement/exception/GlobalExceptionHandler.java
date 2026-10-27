@@ -4,6 +4,7 @@ import com.philippos.employeemanagement.dto.response.ApiErrorResponse;
 import com.philippos.employeemanagement.dto.response.EmployeeReactivationConflictResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -53,6 +54,16 @@ public class GlobalExceptionHandler {
             BadCredentialsException exception) {
 
         return buildResponse(HttpStatus.UNAUTHORIZED, exception.getMessage());
+    }
+
+    @ExceptionHandler(LoginRateLimitException.class)
+    public ResponseEntity<ApiErrorResponse> handleLoginRateLimitException(
+            LoginRateLimitException exception) {
+        HttpStatus status = HttpStatus.TOO_MANY_REQUESTS;
+        return ResponseEntity.status(status)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(exception.getRetryAfterSeconds()))
+                .body(new ApiErrorResponse(status.value(), status.getReasonPhrase(),
+                        exception.getMessage()));
     }
 
     @ExceptionHandler(EmployeeConflictException.class)
