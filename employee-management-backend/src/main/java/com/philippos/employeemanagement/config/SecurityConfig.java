@@ -81,6 +81,10 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/swagger-ui.html"
                         ).permitAll()
+
+                        // Liveness/readiness probe used by Docker healthchecks
+                        .requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
+
                         // Login is the only public authentication endpoint
                         .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
 
@@ -230,14 +234,14 @@ public class SecurityConfig {
                 List.of("*")
         );
 
-        // Allow Authorization header
+        // Expose headers the frontend may need to read
         configuration.setExposedHeaders(
-                List.of("Authorization")
+                List.of("Authorization", "Retry-After")
         );
 
-        // JWT does not require cookies,
-        // but enabling credentials makes future extensions easier.
-        configuration.setAllowCredentials(true);
+        // Credentials (cookies) are not allowed: authentication uses
+        // the Authorization header, so cross-origin cookies are never needed.
+        configuration.setAllowCredentials(false);
 
         UrlBasedCorsConfigurationSource source =
                 new UrlBasedCorsConfigurationSource();

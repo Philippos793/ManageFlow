@@ -1,16 +1,34 @@
-# React + Vite
+# ManageFlow Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React 19 + Vite single-page application for ManageFlow. See the [root README](../README.md) for the full project overview, backend setup, and Docker instructions.
 
-Currently, two official plugins are available:
+## Setup
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bat
+copy .env.example .env
+npm install
+npm run dev
+```
 
-## React Compiler
+`VITE_API_URL` in `.env` must point to the backend, e.g. `http://localhost:8080`.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Scripts
 
-## Expanding the ESLint configuration
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Start the Vite dev server on `http://localhost:5173`. |
+| `npm test` | Run the Vitest + React Testing Library suite. |
+| `npm run lint` | Run ESLint. |
+| `npm run build` | Create a production build in `dist/`. |
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Structure
+
+- `src/pages` — route-level pages (employees, departments, tasks, work hours, login, onboarding).
+- `src/components` — feature components and modals; `src/components/ui` holds shared UI primitives.
+- `src/services` — API clients that attach the JWT and normalize errors.
+- `src/hooks` — reusable hooks.
+- `src/utils` — error helpers.
+
+## Production image
+
+The `Dockerfile` builds the app and serves it with Nginx. `nginx.conf` adds SPA routing and security headers, including a Content-Security-Policy whose `connect-src` is limited to the configured `VITE_API_URL`.
